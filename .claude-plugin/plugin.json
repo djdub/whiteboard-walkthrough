@@ -1,0 +1,8 @@
+{
+  "name": "whiteboard-walkthrough",
+  "version": "0.1.0",
+  "description": "Turn a design or decision into a narrated whiteboard page: a drawing of the system plus spoken steps that light up their part of it, ending with the decision and a recommendation.",
+  "author": { "name": "Dave DuBois" },
+  "license": "MIT",
+  "keywords": ["design", "whiteboard", "diagram", "walkthrough", "narration", "text-to-speech"]
+}

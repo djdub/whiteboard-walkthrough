@@ -1,0 +1,48 @@
+{
+  "title": "Automatic Late-Order Refunds",
+  "subtitle": "A worked example: refund the shipping fee when an order arrives late, without anyone filing a ticket. Proposal, not yet built.",
+  "board": {
+    "width": 1560, "height": 640,
+    "lanes": [
+      {"label": "Storefront", "y": 0, "h": 152},
+      {"label": "Order service", "y": 155, "h": 152},
+      {"label": "Payments", "y": 310, "h": 152},
+      {"label": "Support team", "y": 465, "h": 150}
+    ],
+    "columns": [
+      {"label": "ORDER PLACED", "x": 170},
+      {"label": "PROMISED DATE PASSES", "x": 640},
+      {"label": "NEXT MORNING", "x": 1350}
+    ],
+    "nodes": [
+      {"id": "order", "x": 170, "y": 48, "w": 190, "h": 72, "kind": "exists", "label": ["Customer orders"], "sub": ["checkout page"]},
+      {"id": "tracker", "x": 170, "y": 203, "w": 190, "h": 72, "kind": "exists", "label": ["Delivery tracker"], "sub": ["carrier updates"]},
+      {"id": "latecheck", "x": 640, "y": 203, "w": 190, "h": 72, "kind": "new", "label": ["Late-order check"], "sub": ["hourly", "past promised date"]},
+      {"id": "refund", "x": 870, "y": 358, "w": 190, "h": 72, "kind": "new", "label": ["Refund request"], "sub": ["shipping fee only"]},
+      {"id": "provider", "x": 1100, "y": 358, "w": 190, "h": 72, "kind": "exists", "label": ["Payments provider"], "sub": ["issues the refund"]},
+      {"id": "email", "x": 1100, "y": 48, "w": 190, "h": 72, "kind": "changed", "label": ["Order email"], "sub": ["adds a refund line"]},
+      {"id": "failed", "x": 870, "y": 513, "w": 190, "h": 72, "kind": "fail", "label": ["Refund failed"], "sub": ["kept for a person"]},
+      {"id": "queue", "x": 1350, "y": 513, "w": 190, "h": 72, "kind": "exists", "label": ["Morning queue"], "sub": ["support team"]}
+    ],
+    "edges": [
+      {"id": "e_creates", "from": "order", "to": "tracker", "via": [[265, 120], [265, 203]], "label": "creates", "lx": 275, "ly": 165, "anchor": "start"},
+      {"id": "e_status", "from": "tracker", "to": "latecheck", "via": [[360, 239], [640, 239]], "label": "delivery status", "lx": 500, "ly": 229},
+      {"id": "e_late", "from": "latecheck", "to": "refund", "via": [[735, 275], [735, 394], [870, 394]], "label": "late", "lx": 745, "ly": 340, "anchor": "start"},
+      {"id": "e_pay", "from": "refund", "to": "provider", "via": [[1060, 394], [1100, 394]]},
+      {"id": "e_issued", "from": "provider", "to": "email", "via": [[1195, 358], [1195, 120]], "label": "refund issued", "lx": 1205, "ly": 300, "anchor": "start"},
+      {"id": "e_declined", "from": "provider", "to": "failed", "kind": "fail", "via": [[1150, 430], [1150, 480], [965, 480], [965, 513]], "label": "declined", "lx": 1058, "ly": 472},
+      {"id": "e_toqueue", "from": "failed", "to": "queue", "kind": "fail", "via": [[1060, 549], [1350, 549]]},
+      {"id": "e_stale", "from": "latecheck", "to": "queue", "kind": "catch", "via": [[830, 257], [1500, 257], [1500, 513]], "label": "no tracking for three days", "lx": 1490, "ly": 247, "anchor": "end"}
+    ]
+  },
+  "steps": [
+    {"title": "The whole picture", "highlight": [], "say": "This is a proposal to refund the shipping fee automatically when an order arrives late. The board has four bands, one for each place something runs: the storefront at the top, then the order service, then payments, and the support team at the bottom. Time runs left to right, from the moment an order is placed, to when its promised date passes, to the next morning. Green boxes are new, plain outlines exist today, the amber dashed box changes, and red dashed lines are the failure path."},
+    {"title": "What exists today", "highlight": ["order", "tracker", "e_creates"], "say": "Start at the top left. A customer places an order on the checkout page, and that creates an entry in the delivery tracker, the plain box just below it in the order service band. The tracker already receives updates from the carrier as the parcel moves, so it knows the promised date and whether the parcel has arrived. Nothing here changes. The proposal only reads what the tracker already knows, which keeps the change small and leaves checkout alone."},
+    {"title": "The new late-order check", "highlight": ["latecheck", "e_status"], "say": "Follow the line right to the first green box, the late-order check. Once an hour it reads the delivery status of every open order and picks out the ones whose promised date has passed with no delivery recorded. It does nothing else: it doesn't contact the customer or decide amounts. Keeping it to one question, is this order late, makes it easy to test with a handful of real orders before it ever moves money."},
+    {"title": "Asking for the refund", "highlight": ["refund", "provider", "e_late", "e_pay"], "say": "When an order is late, the line drops down into the payments band, to the second green box, the refund request. It asks for the shipping fee only, never the whole order, and it sends that request to the payments provider, the plain box to its right, which we already use for every other refund. Each order can be refunded this way once, so an hourly check that sees the same late order again does nothing the second time."},
+    {"title": "Telling the customer", "highlight": ["email", "e_issued"], "say": "When the provider confirms the refund, the line climbs back up to the storefront, to the amber dashed box, the order email. That is the one changed part: the existing order email gains a single line saying the shipping fee was refunded because the parcel was late. Customers hear about it before they think to complain, which is the whole point, and support never has to look the order up."},
+    {"title": "When the refund fails", "highlight": ["e_declined", "failed", "e_toqueue", "queue"], "say": "Now the failure path, the red dashed line. Sometimes the provider declines a refund, for example when the card has expired. The line runs down from the provider into the red box in the support band, refund failed. Nothing retries on its own. The order is kept, with the reason, and the red line carries it right to the morning queue, the plain box at the bottom right, where a person sees it the next day and refunds it another way."},
+    {"title": "The catch-all", "highlight": ["e_stale", "queue"], "say": "The grey dotted line is the catch-all. Some orders never get tracking data at all, because a carrier stops sending updates. The late-order check can't tell whether those parcels are late, so it doesn't guess. If an order has had no tracking for three days, the dotted line sends it straight to the same morning queue. That way an order with no data is seen by a person instead of quietly never being refunded."},
+    {"title": "Cost and the decision", "highlight": [], "say": "The cost is two new parts, the hourly check and the refund request, one changed email, and one new stored fact per order, whether it has been refunded. It retires the manual late-delivery ticket. The decision is the refund amount. Option one, the shipping fee only, which is what's drawn. Option two, a fixed credit toward the next order. My recommendation is the shipping fee: it costs less than the tickets it replaces, and it's easy to explain in one line of an email."}
+  ]
+}

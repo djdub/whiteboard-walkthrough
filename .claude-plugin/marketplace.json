@@ -1,0 +1,14 @@
+{
+  "name": "whiteboard-walkthrough",
+  "description": "One plugin: narrated whiteboard walkthroughs for designs and decisions.",
+  "owner": {
+    "name": "Dave DuBois"
+  },
+  "plugins": [
+    {
+      "name": "whiteboard-walkthrough",
+      "source": "./",
+      "description": "Narrated whiteboard walkthroughs for designs and decisions. Free on-device voice by default; ElevenLabs if you have a key."
+    }
+  ]
+}

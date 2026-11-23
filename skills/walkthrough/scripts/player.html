@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a drafting-table board on top (lanes by where things run, left to right in time), the spoken step under it,
+   transport controls, then the numbered chapter list. Marker colours: green new, graphite exists, amber changed,
+   red dashed failure path; a yellow highlighter sweep marks what is being spoken about. */
+:root {
+  --bg: #eef0ec; --panel: #fbfbf8; --ink: #1f2a2e; --muted: #5d6a6e; --line: #c9cfcb;
+  --exist-fill: #ffffff; --exist-stroke: #7d8a8e;
+  --new-fill: #e2f1e8; --new-stroke: #1d7a55; --new-ink: #0f4f37;
+  --chg-stroke: #b9800f; --fail: #c03c35; --catch: #4f6470;
+  --hl: #f6dd52; --lane: #e5e8e3; --lane-ink: #66726f; --focus: #1d7a55;
+  --f-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141819; --panel: #1c2224; --ink: #e6ebe8; --muted: #9aa6a3; --line: #34403f;
+  --exist-fill: #1f2628; --exist-stroke: #8b9a9c; --new-fill: #17352a; --new-stroke: #4cc08e; --new-ink: #b9ecd3;
+  --chg-stroke: #e0a83a; --fail: #ec6f66; --catch: #8fa6b2; --hl: rgba(246, 221, 82, .32); --lane: #1a2022; --lane-ink: #8e9b98; --focus: #4cc08e;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141819; --panel: #1c2224; --ink: #e6ebe8; --muted: #9aa6a3; --line: #34403f;
+  --exist-fill: #1f2628; --exist-stroke: #8b9a9c; --new-fill: #17352a; --new-stroke: #4cc08e; --new-ink: #b9ecd3;
+  --chg-stroke: #e0a83a; --fail: #ec6f66; --catch: #8fa6b2; --hl: rgba(246, 221, 82, .32); --lane: #1a2022; --lane-ink: #8e9b98; --focus: #4cc08e;
+  color-scheme: dark }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-text); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+header h1 { font: 600 clamp(22px, 3vw, 30px)/1.15 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+header p#runtime { margin-top: 8px; color: var(--ink, inherit); font-weight: 600; }
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+.board svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 12px; border-radius: 3px; border: 2px solid var(--exist-stroke); background: var(--exist-fill); }
+.sw.new { border-color: var(--new-stroke); background: var(--new-fill); }
+.sw.chg { border-color: var(--chg-stroke); border-style: dashed; }
+.sw.fail { border: 0; height: 0; border-top: 2px dashed var(--fail); border-radius: 0; background: none; }
+.sw.catch { border: 0; height: 0; border-top: 2px dotted var(--catch); border-radius: 0; background: none; }
+.sw.hl { border: 0; background: var(--hl); }
+.now { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; }
+.now .eyebrow { font: 500 11.5px/1 var(--f-text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.now h2 { margin: 0; font: 600 19px/1.25 var(--f-display); text-wrap: balance; }
+.now p { margin: 0; max-width: 72ch; }
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button { font: 500 14px/1 var(--f-text); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; cursor: pointer; }
+button:hover { border-color: var(--exist-stroke); }
+button:focus-visible, .chap:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button.primary { background: var(--new-stroke); border-color: var(--new-stroke); color: #fff; min-width: 112px; }
+.bar { flex: 1 1 160px; height: 6px; background: var(--lane); border-radius: 3px; overflow: hidden; min-width: 120px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--new-stroke); }
+.count { font: 500 13px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; color: var(--muted); }
+ol.chapters { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.chap { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: start; text-align: left; width: 100%; padding: 10px 12px; background: var(--panel); }
+.chap b { font: 500 12px/1.6 var(--f-mono); color: var(--muted); }
+.chap span { font-size: 13.5px; line-height: 1.4; }
+.chap[aria-current="step"] { border-color: var(--new-stroke); box-shadow: inset 3px 0 0 var(--new-stroke); }
+/* board marks */
+.lane rect { fill: var(--lane); }
+.lane text { fill: var(--lane-ink); font: 600 12px var(--f-text); letter-spacing: .06em; text-transform: uppercase; }
+.col text { fill: var(--muted); font: 500 12px var(--f-mono); }
+.col line { stroke: var(--line); stroke-dasharray: 3 5; }
+.node rect.box { fill: var(--exist-fill); stroke: var(--exist-stroke); stroke-width: 1.6; }
+.node.new rect.box { fill: var(--new-fill); stroke: var(--new-stroke); stroke-width: 2; }
+.node.changed rect.box { stroke: var(--chg-stroke); stroke-width: 2; stroke-dasharray: 6 4; }
+.node.fail rect.box { stroke: var(--fail); stroke-width: 2; }
+.node text.t { fill: var(--ink); font: 600 13.5px var(--f-text); }
+.node.new text.t { fill: var(--new-ink); }
+.node text.s { fill: var(--muted); font: 400 11.5px var(--f-mono); }
+.node rect.hl { fill: var(--hl); opacity: 0; }
+.edge path { fill: none; stroke: var(--exist-stroke); stroke-width: 1.6; }
+.edge.fail path { stroke: var(--fail); stroke-dasharray: 7 5; }
+.edge.catch path { stroke: var(--catch); stroke-dasharray: 2 4; }
+.edge text { fill: var(--muted); font: 500 11px var(--f-text); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.edge.fail text { fill: var(--fail); }
+svg.focus .node, svg.focus .edge { opacity: .26; transition: opacity .35s; }
+svg.focus .on { opacity: 1; }
+svg .node.on rect.hl { opacity: 1; transition: opacity .35s; }
+svg .edge.on path { stroke-width: 2.8; }
+svg .edge.on:not(.fail):not(.catch) path { stroke: var(--ink); }
+@media (prefers-reduced-motion: no-preference) {
+  svg .edge.on path { stroke-dasharray: 8 6; animation: flow 1.1s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 id="title"></h1>
+    <p id="sub"></p>
+    <p id="runtime"></p>
+  </header>
+  <div class="board" id="board" aria-label="Diagram"></div>
+  <div class="key" aria-label="Key">
+    <span><i class="sw new"></i>New</span><span><i class="sw"></i>Exists today</span>
+    <span><i class="sw chg"></i>Changed</span><span><i class="sw fail"></i>Failure path</span><span><i class="sw catch"></i>Catch-all</span>
+    <span><i class="sw hl"></i>Being described now</span>
+  </div>
+  <section class="now" aria-live="polite">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h2 id="stitle"></h2>
+    <p id="stext"></p>
+    <div class="transport">
+      <button id="back" aria-label="Previous step">Back</button>
+      <button id="play" class="primary">Play</button>
+      <button id="next" aria-label="Next step">Next</button>
+      <div class="bar" aria-hidden="true"><i id="prog"></i></div>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="note" id="note">Press Play to hear the walkthrough; each step lights up its part of the board and moves on when it ends. Space plays or pauses, arrow keys step.</div>
+  </section>
+  <ol class="chapters" id="chapters"></ol>
+</div>
+<audio id="au" preload="auto"></audio>
+<script type="application/json" id="spec">__SPEC__</script>
+</html>
+<script>
+(function () {
+  const spec = JSON.parse(document.getElementById('spec').textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (n, a = {}, p) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+  const b = spec.board, W = b.width, H = b.height;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': spec.title });
+  const defs = el('defs', {}, svg);
+  for (const [id, cls] of [['ah', 'var(--exist-stroke)'], ['ahon', 'var(--ink)'], ['ahf', 'var(--fail)'], ['ahc', 'var(--catch)']]) {
+    const m = el('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 z', style: `fill:${cls}` }, m);
+  }
+  for (const l of b.lanes) { const g = el('g', { class: 'lane' }, svg); el('rect', { x: 0, y: l.y, width: W, height: l.h, rx: 0 }, g); const t = el('text', { x: 14, y: l.y + 22 }, g); t.textContent = l.label; }
+  for (const c of b.columns || []) { const g = el('g', { class: 'col' }, svg); if (c.x > 0) el('line', { x1: c.x - 16, y1: 4, x2: c.x - 16, y2: H - 4 }, g); const t = el('text', { x: c.x, y: H - 10 }, g); t.textContent = c.label; }
+  const nodes = {}; const items = {};
+  const edgeLayer = el('g', {}, svg);
+  for (const n of b.nodes) {
+    const g = el('g', { class: 'node ' + (n.kind || 'exists'), id: 'n-' + n.id }, svg);
+    el('rect', { class: 'hl', x: n.x - 7, y: n.y - 6, width: n.w + 14, height: n.h + 12, rx: 4, transform: `rotate(-1.2 ${n.x + n.w / 2} ${n.y + n.h / 2})` }, g);
+    el('rect', { class: 'box', x: n.x, y: n.y, width: n.w, height: n.h, rx: 8 }, g);
+    const lines = [].concat(n.label);
+    lines.forEach((ln, i) => { const t = el('text', { class: 't', x: n.x + 12, y: n.y + 23 + i * 17 }, g); t.textContent = ln; });
+    [].concat(n.sub || []).forEach((ln, i) => { const t = el('text', { class: 's', x: n.x + 12, y: n.y + 23 + lines.length * 17 + i * 15 }, g); t.textContent = ln; });
+    nodes[n.id] = n; items[n.id] = g;
+  }
+  const side = (n, o) => { const cx = n.x + n.w / 2, cy = n.y + n.h / 2, ox = o.x + o.w / 2, oy = o.y + o.h / 2, dx = ox - cx, dy = oy - cy;
+    return Math.abs(dx) * n.h > Math.abs(dy) * n.w ? [dx > 0 ? n.x + n.w : n.x, cy, dx > 0 ? 1 : -1, 0] : [cx, dy > 0 ? n.y + n.h : n.y, 0, dy > 0 ? 1 : -1]; };
+  for (const e of b.edges) {
+    const a = nodes[e.from], z = nodes[e.to]; if (!a || !z) continue;
+    const g = el('g', { class: 'edge ' + (e.kind || ''), id: 'e-' + e.id }, edgeLayer);
+    const mk = e.kind === 'fail' ? 'ahf' : e.kind === 'catch' ? 'ahc' : 'ah';
+    let d, lx, ly;
+    if (e.via) {   // routed: the spec lists the line's points, start to end, so lines go around boxes
+      d = 'M' + e.via.map(pt => pt.join(',')).join(' L');
+      const m = e.via[Math.floor((e.via.length - 1) / 2)], n2 = e.via[Math.floor((e.via.length - 1) / 2) + 1];
+      lx = (m[0] + n2[0]) / 2; ly = (m[1] + n2[1]) / 2 - 7;
+    } else {
+      const [x1, y1, ux, uy] = side(a, z), [x2, y2, vx, vy] = side(z, a);
+      const k = Math.max(40, Math.hypot(x2 - x1, y2 - y1) * .35);
+      d = `M${x1},${y1} C${x1 + ux * k},${y1 + uy * k} ${x2 + vx * k},${y2 + vy * k} ${x2},${y2}`;
+      lx = (x1 + x2) / 2 + (ux + vx) * k * .19; ly = (y1 + y2) / 2 + (uy + vy) * k * .19 - 6;
+    }
+    el('path', { d, 'marker-end': `url(#${mk})` }, g);
+    if (e.label) { const t = el('text', { x: e.lx ?? lx, y: e.ly ?? ly, 'text-anchor': e.anchor || 'middle' }, g); t.textContent = e.label; }
+    items[e.id] = g; g._mk = mk;
+  }
+  document.getElementById('board').appendChild(svg);
+  document.getElementById('title').textContent = spec.title;
+  document.getElementById('sub').textContent = spec.subtitle || '';
+  {   // the top matter says how long a full play-through takes, so the reader can set the time aside
+    const secs = Math.round(spec.steps.reduce((n, s) => n + (s.audio_seconds || 0), 0));
+    const m = Math.floor(secs / 60), sec = secs % 60, about = spec.steps.some((s) => s.estimated) ? 'about ' : '';
+    document.getElementById('runtime').textContent = secs
+      ? 'Plays through in ' + about + (m ? m + ' min ' : '') + (sec ? sec + ' s' : '') + ' (' + spec.steps.length + ' steps).'
+      : spec.steps.length + ' steps.';
+  }
+
+  const steps = spec.steps, au = document.getElementById('au');
+  const $ = (id) => document.getElementById(id);
+  const synth = window.speechSynthesis || null;
+  const chapters = $('chapters');
+  steps.forEach((s, i) => { const li = document.createElement('li'); const bt = document.createElement('button'); bt.className = 'chap'; bt.id = 'chap-' + i;
+    bt.innerHTML = '<b></b><span></span>'; bt.querySelector('b').textContent = String(i + 1).padStart(2, '0'); bt.querySelector('span').textContent = s.title;
+    bt.addEventListener('click', () => go(i, true)); li.appendChild(bt); chapters.appendChild(li); });
+  let cur = 0, playing = false, started = false, loaded = -1, mode = null;
+  const failed = new Set();   // steps whose audio file did not load: the browser voice reads them instead
+  function light(ids) {
+    for (const id in items) { const on = ids.includes(id); items[id].classList.toggle('on', on); const p = items[id].querySelector('path'); if (p) p.setAttribute('marker-end', `url(#${on && items[id]._mk === 'ah' ? 'ahon' : items[id]._mk})`); }
+    svg.classList.toggle('focus', ids.length > 0);
+  }
+  function show(i) {
+    cur = i; const s = steps[i];
+    $('eyebrow').textContent = 'Step ' + (i + 1) + ' of ' + steps.length + (s.audio_seconds ? ' · ' + (s.estimated ? 'about ' : '') + Math.round(s.audio_seconds) + ' s' : '');
+    $('stitle').textContent = s.title; $('stext').textContent = s.say;
+    $('count').textContent = String(i + 1).padStart(2, '0') + ' / ' + String(steps.length).padStart(2, '0');
+    light(s.highlight || []); $('prog').style.width = '0';
+    document.querySelectorAll('.chap').forEach((c, j) => { if (j === i) c.setAttribute('aria-current', 'step'); else c.removeAttribute('aria-current'); });
+    $('back').disabled = i === 0; $('next').disabled = i === steps.length - 1;
+  }
+
+  // Browser voice: speak a step sentence by sentence (long single utterances stall in some browsers). `gen` cancels
+  // stale callbacks after a pause, a skip or a chapter click; resuming restarts the current sentence.
+  let gen = 0, queue = [], qi = 0;
+  const pickVoice = () => { const vs = synth.getVoices().filter((v) => /^en/i.test(v.lang));
+    return vs.find((v) => v.localService && /Daniel|Samantha|Natural|Premium|Enhanced/.test(v.name)) || vs.find((v) => v.default) || vs[0] || null; };
+  function speakFrom(g) {
+    if (g !== gen) return;
+    if (qi >= queue.length) return ended();
+    const u = new SpeechSynthesisUtterance(queue[qi]); const v = pickVoice(); if (v) u.voice = v;
+    u.onend = () => { if (g !== gen) return; qi++; $('prog').style.width = (100 * qi / queue.length) + '%'; speakFrom(g); };
+    u.onerror = (e) => { if (g !== gen || e.error === 'interrupted' || e.error === 'canceled') return; setPlaying(false); $('note').textContent = 'Your browser could not speak this step: read along and press Next.'; };
+    synth.speak(u);
+  }
+  function hush() { au.pause(); if (synth) { gen++; synth.cancel(); } }
+
+  function load(i) {
+    hush(); loaded = i; const s = steps[i];
+    if (s.audio && !failed.has(i)) { mode = 'audio'; au.src = s.audio; return true; }
+    au.removeAttribute('src');
+    if (synth) { mode = 'tts'; queue = s.say.match(/[^.!?]+[.!?]+["')]*\s*|[^.!?]+$/g) || [s.say]; qi = 0; return true; }
+    mode = null; $('note').textContent = 'No audio for this step: read along and press Next.'; return false;
+  }
+  function go(i, andPlay) { const was = playing; show(i); if (load(i) && (andPlay || was)) start(); else setPlaying(false); }
+  function setPlaying(v) { playing = v; $('play').textContent = v ? 'Pause' : (started ? 'Resume' : 'Play'); }
+  function start() {
+    started = true; setPlaying(true);
+    if (mode === 'tts') { const g = ++gen; synth.cancel(); speakFrom(g); return; }
+    const p = au.play(); if (p && p.catch) p.catch(() => { setPlaying(false); $('note').textContent = 'The browser held the sound back. Press Play again to start it.'; });
+  }
+  function pause() { setPlaying(false); if (mode === 'tts') { gen++; synth.cancel(); } else au.pause(); }
+  function ended() { if (cur < steps.length - 1) go(cur + 1, true); else { setPlaying(false); started = false; loaded = -1; $('play').textContent = 'Play again'; $('note').textContent = 'End of the walkthrough.'; } }
+  $('play').addEventListener('click', () => { if (playing) return pause(); if (loaded !== cur) { if (!load(cur)) return; } start(); });
+  $('next').addEventListener('click', () => cur < steps.length - 1 && go(cur + 1));
+  $('back').addEventListener('click', () => cur > 0 && go(cur - 1));
+  au.addEventListener('timeupdate', () => { if (au.duration) $('prog').style.width = (100 * au.currentTime / au.duration) + '%'; });
+  au.addEventListener('ended', ended);
+  au.addEventListener('error', () => {
+    if (mode !== 'audio' || !au.getAttribute('src')) return;
+    failed.add(cur); const was = playing;
+    if (synth) { $('note').textContent = 'This step\'s audio did not load, so your browser\'s voice is reading it.'; load(cur); if (was) start(); }
+    else { setPlaying(false); $('note').textContent = 'This step\'s audio did not load: read along and press Next.'; }
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.target.closest && ev.target.closest('button') && ev.key === ' ') return;
+    if (ev.key === ' ') { ev.preventDefault(); $('play').click(); } else if (ev.key === 'ArrowRight') $('next').click(); else if (ev.key === 'ArrowLeft') $('back').click(); });
+  if (spec.speech === 'browser') $('note').textContent = 'Press Play and your browser\'s own voice reads each step; the board lights up as it goes. Space plays or pauses, arrow keys step.';
+  show(0); light([]); $('stitle').textContent = steps[0].title;
+})();
+</script>
+</html>

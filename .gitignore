@@ -1,0 +1,4 @@
+walkthroughs/
+skills/walkthrough/examples/*/
+node_modules/
+.DS_Store
