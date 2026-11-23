@@ -35,6 +35,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(
 header h1 { font: 600 clamp(22px, 3vw, 30px)/1.15 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
 header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 header p#runtime { margin-top: 8px; color: var(--ink, inherit); font-weight: 600; }
+header nav.links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; }
+header nav.links a { color: var(--new-stroke); font-weight: 600; text-underline-offset: 3px; }
+header nav.links a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .board { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
 .board svg { display: block; width: 100%; min-width: 760px; height: auto; }
 .key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
@@ -97,6 +100,7 @@ svg .edge.on:not(.fail):not(.catch) path { stroke: var(--ink); }
     <h1 id="title"></h1>
     <p id="sub"></p>
     <p id="runtime"></p>
+    <nav class="links" id="links" aria-label="Links" hidden></nav>
   </header>
   <div class="board" id="board" aria-label="Diagram"></div>
   <div class="key" aria-label="Key">
@@ -171,6 +175,12 @@ svg .edge.on:not(.fail):not(.catch) path { stroke: var(--ink); }
   document.getElementById('board').appendChild(svg);
   document.getElementById('title').textContent = spec.title;
   document.getElementById('sub').textContent = spec.subtitle || '';
+  {   // optional links under the subtitle (where the project lives, a design doc); http(s) only
+    const nav = document.getElementById('links');
+    for (const l of spec.links || []) { if (!/^https?:\/\//.test(l.url || '')) continue;
+      const a = document.createElement('a'); a.href = l.url; a.textContent = l.label || l.url; a.rel = 'noopener'; nav.appendChild(a); }
+    nav.hidden = !nav.children.length;
+  }
   {   // the top matter says how long a full play-through takes, so the reader can set the time aside
     const secs = Math.round(spec.steps.reduce((n, s) => n + (s.audio_seconds || 0), 0));
     const m = Math.floor(secs / 60), sec = secs % 60, about = spec.steps.some((s) => s.estimated) ? 'about ' : '';

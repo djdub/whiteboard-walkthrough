@@ -31,7 +31,8 @@ skill's base directory when it loads it; call it `SKILL_DIR` below.
 2. **Draw the board** as a spec file, `walkthroughs/<slug>.json` in the current project. Copy the shape of
    `SKILL_DIR/examples/order-refunds.json`.
    - `title` (the subject's name), `subtitle` (one sentence: what it is, its status, where the design lives). The page
-     works out the total play time and shows it under the subtitle.
+     works out the total play time and shows it under the subtitle. Optional `links`: `[{"label", "url"}]`, shown
+     under the subtitle (where the project or the design doc lives); http(s) URLs only.
    - `board.width` and `board.height`: keep within about 1,560 × 640.
    - `board.lanes`: horizontal bands for **where things run** (a service, a repo, a database, a person's machine, where
      the reader looks), each with `label`, `y`, `h`.

@@ -60,6 +60,7 @@ export function validate(spec) {
       if (n.id !== e.from && n.id !== e.to && crosses(e.via[k], e.via[k + 1], n)) warnings.push(`edge ${e.id} runs through box ${n.id}`);
     }
   }
+  for (const l of [].concat(spec.links || [])) if (!l || !/^https?:\/\//.test(l.url || '') || !l.label) errors.push('each link needs a label and an http(s) url');
   const steps = spec.steps || [];
   if (!steps.length) errors.push('no steps');
   else if (steps.length < 8 || steps.length > 12) warnings.push(`${steps.length} steps; 8 to 12 read best`);

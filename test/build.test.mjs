@@ -129,3 +129,12 @@ test('the Mac voice makes one clip per step and reuses unchanged clips', { skip:
     assert.ok(spec.steps.every((s) => s.audio.startsWith('audio/') && s.audio_seconds > 10));
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+test('links: shown on the page when valid, an error when not http(s)', () => {
+  const s = example();
+  s.links = [{ label: 'Project', url: 'https://example.com/project' }];
+  assert.deepEqual(validate(s).errors, []);
+  assert.ok(renderPage(s).includes('https://example.com/project'));
+  s.links = [{ label: 'Bad', url: 'javascript:alert(1)' }];
+  assert.ok(validate(s).errors.some((e) => e.includes('http(s) url')));
+});

@@ -4,6 +4,14 @@ A Claude Code plugin that turns a design, proposal or decision into one narrated
 system (lanes for where things run, columns for when, new vs existing vs changed parts, the failure path) and 8 to 12
 spoken steps that light up their part of the board as they play. It ends with the decision and a recommendation.
 
+## See it explain itself
+
+[![The plugin's own walkthrough: a whiteboard of how it works, with 11 narrated steps](docs/how-it-works.png)](https://aios.cx/walkthrough/)
+
+**[Watch the walkthrough](https://aios.cx/walkthrough/)** (about 5 minutes, with sound). The page was made by this
+plugin from [`docs/how-it-works.json`](docs/how-it-works.json), so it shows both how the plugin works and what it
+makes.
+
 ## Install
 
 In Claude Code:
