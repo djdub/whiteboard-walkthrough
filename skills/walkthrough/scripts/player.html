@@ -35,9 +35,11 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(
 header h1 { font: 600 clamp(22px, 3vw, 30px)/1.15 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
 header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 header p#runtime { margin-top: 8px; color: var(--ink, inherit); font-weight: 600; }
-header.has-home { display: grid; grid-template-columns: 38px minmax(0, 1fr); column-gap: 14px; align-items: start; }
-header.has-home > :not(.home) { grid-column: 2; }
-header .home { grid-column: 1; grid-row: 1 / span 4; width: 38px; height: 38px; border-radius: 9px; overflow: hidden; margin-top: 2px; }
+/* The home logo hangs in the left margin beside the title, so the text keeps the board's left edge; where the window
+   has no margin to hang it in, it sits above the title instead. */
+header { position: relative; }
+header .home { position: absolute; left: -54px; top: 0; width: 38px; height: 38px; border-radius: 9px; overflow: hidden; }
+@media (max-width: 1379px) { header .home { position: static; margin-bottom: 12px; } }
 header .home:not([hidden]) { display: block; }
 header .home img { display: block; width: 100%; height: 100%; }
 header .home:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -183,7 +185,7 @@ svg .edge.on:not(.fail):not(.catch) path { stroke: var(--ink); }
   document.getElementById('sub').textContent = spec.subtitle || '';
   if (spec.home && /^https?:\/\//.test(spec.home.url || '') && /^https?:\/\//.test(spec.home.logo || '')) {   // optional logo, top left: a quiet way back to the site that hosts the page
     const h = document.getElementById('home'); h.href = spec.home.url; h.setAttribute('aria-label', spec.home.name || 'Home');
-    h.title = spec.home.name || ''; document.getElementById('homelogo').src = spec.home.logo; h.hidden = false; h.parentElement.classList.add('has-home');
+    h.title = spec.home.name || ''; document.getElementById('homelogo').src = spec.home.logo; h.hidden = false;
   }
   {   // optional links under the subtitle (where the project lives, a design doc); http(s) only
     const nav = document.getElementById('links');
