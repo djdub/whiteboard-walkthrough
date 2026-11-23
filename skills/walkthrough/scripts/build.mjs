@@ -7,7 +7,7 @@
 // Output: <spec folder>/<slug>/index.html and audio/<nn>-<hash>.<mp3|m4a>. A step keeps its audio while its text is
 // unchanged, so an edit pays only for the steps it changed. ElevenLabs sends the text off the machine: it needs
 // --ok-to-send. With --voice browser no audio is made and the page speaks each step with the reader's browser voice.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync, rmdirSync, appendFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,10 @@ import { pickEngine, extFor, saySynthesize, elBalance, elSynthesize, elCharge, e
 const HERE = dirname(fileURLToPath(import.meta.url));
 const KINDS = new Set(['new', 'exists', 'changed', 'fail']);
 const EDGE_KINDS = new Set(['fail', 'catch', 'plain']);
+const HTTP = /^https?:\/\//;
+/** Audio files this builder writes, and the only files it ever deletes: 01-0123456789.mp3 or .m4a */
+export const GENERATED_AUDIO = /^\d{2,3}-[0-9a-f]{10}\.(mp3|m4a)$/;
+const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && Number.isFinite(v));
 
 const onBorder = ([x, y], n, t = 3) => x >= n.x - t && x <= n.x + n.w + t && y >= n.y - t && y <= n.y + n.h + t
   && !(x > n.x + t && x < n.x + n.w - t && y > n.y + t && y < n.y + n.h - t);
@@ -37,6 +41,9 @@ export function validate(spec) {
   const b = spec.board || {};
   if (typeof b.width !== 'number' || typeof b.height !== 'number') errors.push('board needs a numeric width and height');
   if (!Array.isArray(b.lanes) || !b.lanes.length) errors.push('board needs at least one lane');
+  for (const k of ['nodes', 'edges', 'columns']) if (b[k] != null && !Array.isArray(b[k])) errors.push(`board.${k} must be a list`);
+  if (spec.steps != null && !Array.isArray(spec.steps)) errors.push('steps must be a list');
+  if (errors.length) return { errors, warnings };
   const ids = new Set();
   const nodes = b.nodes || [];
   for (const n of nodes) {
@@ -53,6 +60,7 @@ export function validate(spec) {
     for (const end of ['from', 'to']) if (!nodes.some((n) => n.id === e[end])) errors.push(`edge ${e.id}: ${end} ${e[end]} is not a node`);
     if (e.kind && !EDGE_KINDS.has(e.kind)) errors.push(`edge ${e.id}: kind ${e.kind} is not fail or catch`);
     if (!e.via) { warnings.push(`edge ${e.id} has no via points; it will curve and may cross boxes`); continue; }
+    if (!Array.isArray(e.via) || e.via.length < 2 || !e.via.every(isPoint)) { errors.push(`edge ${e.id}: via must be a list of at least two [x, y] number pairs`); continue; }
     const from = nodes.find((n) => n.id === e.from), to = nodes.find((n) => n.id === e.to);
     if (from && !onBorder(e.via[0], from)) warnings.push(`edge ${e.id}: first via point is not on the edge of box ${e.from}`);
     if (to && !onBorder(e.via[e.via.length - 1], to)) warnings.push(`edge ${e.id}: last via point is not on the edge of box ${e.to}`);
@@ -60,12 +68,16 @@ export function validate(spec) {
       if (n.id !== e.from && n.id !== e.to && crosses(e.via[k], e.via[k + 1], n)) warnings.push(`edge ${e.id} runs through box ${n.id}`);
     }
   }
-  for (const l of [].concat(spec.links || [])) if (!l || !/^https?:\/\//.test(l.url || '') || !l.label) errors.push('each link needs a label and an http(s) url');
+  for (const l of [].concat(spec.links || [])) if (!l || !HTTP.test(l.url || '') || !l.label) errors.push('each link needs a label and an http(s) url');
+  if (spec.home != null && (!HTTP.test(spec.home.url || '') || !HTTP.test(spec.home.logo || '') || !spec.home.name))
+    errors.push('home needs a name, an http(s) url and an http(s) logo image');
   const steps = spec.steps || [];
   if (!steps.length) errors.push('no steps');
   else if (steps.length < 8 || steps.length > 12) warnings.push(`${steps.length} steps; 8 to 12 read best`);
   steps.forEach((s, i) => {
-    if (!s.title || !s.say) { errors.push(`step ${i + 1}: needs title and say`); return; }
+    if (!s || typeof s.title !== 'string' || typeof s.say !== 'string' || !s.title || !s.say) { errors.push(`step ${i + 1}: needs title and say`); return; }
+    if (s.highlight != null && !Array.isArray(s.highlight)) { errors.push(`step ${i + 1}: highlight must be a list`); return; }
+    for (const f of ['audio', 'audio_seconds', 'estimated']) if (f in s) errors.push(`step ${i + 1}: ${f} is written by the builder, not the spec`);
     for (const h of s.highlight || []) if (!ids.has(h)) errors.push(`step ${i + 1}: highlight ${h} is not a node or edge`);
     const words = s.say.trim().split(/\s+/).length;
     if (words < 60 || words > 110) warnings.push(`step ${i + 1}: ${words} words; 60 to 110 is the range`);
@@ -140,26 +152,31 @@ export async function build(argv, log = console.log) {
       if (r.historyItemId) {
         const credits = await elCharge(key, r.historyItemId);
         if (credits != null) charged.push({ step: x.i + 1, chars: x.s.say.length, credits });
-        await elDelete(key, r.historyItemId);
+        if (!(await elDelete(key, r.historyItemId) || await elDelete(key, r.historyItemId)))
+          log(`warning: could not delete step ${x.i + 1}'s ElevenLabs history item; its text stays in your ElevenLabs history until you delete it there`);
       }
     }
     log(`  voiced step ${x.i + 1}`);
   }
   const keep = new Set(need.map((x) => x.file).filter(Boolean));
-  for (const f of readdirSync(audioDir)) if (!keep.has(f)) rmSync(join(audioDir, f));   // old takes of edited steps
-  if (!keep.size) rmSync(audioDir, { recursive: true, force: true });
+  // Old takes of edited steps. Only files this builder names are ever deleted, so an --out folder that already holds
+  // other audio keeps it; the folder itself goes only when nothing is left in it.
+  for (const f of readdirSync(audioDir)) if (GENERATED_AUDIO.test(f) && !keep.has(f)) rmSync(join(audioDir, f));
+  if (!keep.size && !readdirSync(audioDir).length) rmdirSync(audioDir);
 
   const page = {
     ...spec,
     speech: engine === 'browser' ? 'browser' : 'audio',
-    steps: need.map((x) => x.file
-      ? { ...x.s, audio: 'audio/' + x.file, audio_seconds: audioSeconds(join(audioDir, x.file)) }
-      : { ...x.s, audio_seconds: estimateSeconds(x.s.say), estimated: true }),
+    steps: need.map((x) => {   // only known fields reach the page; audio is always a file this build wrote
+      const base = { title: x.s.title, say: x.s.say, highlight: x.s.highlight || [] };
+      return x.file ? { ...base, audio: 'audio/' + x.file, audio_seconds: audioSeconds(join(audioDir, x.file)) }
+        : { ...base, audio_seconds: estimateSeconds(x.s.say), estimated: true };
+    }),
   };
   writeFileSync(join(out, 'index.html'), renderPage(page));
   if (charged.length) {
     const credits = charged.reduce((n, c) => n + c.credits, 0);
-    appendFileSync(join(out, 'cost.jsonl'), JSON.stringify({ at: new Date().toISOString(), slug, voice: EL.voiceId, model: EL.model, credits, per_step: charged }) + '\n');
+    appendFileSync(join(dirname(resolve(a.spec)), slug + '.cost.jsonl'), JSON.stringify({ at: new Date().toISOString(), slug, voice: EL.voiceId, model: EL.model, credits, per_step: charged }) + '\n');
     log(`ElevenLabs: ${credits} credits for ${charged.length} step(s)`);
   }
   const total = page.steps.reduce((n, s) => n + s.audio_seconds, 0);

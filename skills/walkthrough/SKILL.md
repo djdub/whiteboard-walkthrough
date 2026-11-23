@@ -32,7 +32,10 @@ skill's base directory when it loads it; call it `SKILL_DIR` below.
    `SKILL_DIR/examples/order-refunds.json`.
    - `title` (the subject's name), `subtitle` (one sentence: what it is, its status, where the design lives). The page
      works out the total play time and shows it under the subtitle. Optional `links`: `[{"label", "url"}]`, shown
-     under the subtitle (where the project or the design doc lives); http(s) URLs only.
+     under the subtitle (where the project or the design doc lives); http(s) URLs only. Optional `home`:
+     `{"name", "url", "logo"}`, a small logo at the top left linking to the site that hosts the page (no visible text;
+     `name` is its accessible label); http(s) URLs only. Never put `audio`, `audio_seconds` or `estimated` in a step:
+     the builder writes those.
    - `board.width` and `board.height`: keep within about 1,560 × 640.
    - `board.lanes`: horizontal bands for **where things run** (a service, a repo, a database, a person's machine, where
      the reader looks), each with `label`, `y`, `h`.
@@ -73,8 +76,9 @@ skill's base directory when it loads it; call it `SKILL_DIR` below.
      page is an estimate, and the voice sounds different in each browser; say so when you share it.
    - **ElevenLabs sends the text off the machine.** The builder refuses unless you also pass `--ok-to-send`. Pass it
      only when the text holds nothing confidential, and nothing the user has said must stay private; otherwise use
-     `--voice say`. The builder deletes each ElevenLabs history item after reading its credit charge, and logs the
-     credits in `walkthroughs/<slug>/cost.jsonl`. A five-minute page costs about 900 credits.
+     `--voice say`. The builder deletes each ElevenLabs history item after reading its credit charge (it warns if a
+     deletion fails), and logs the credits in `walkthroughs/<slug>.cost.jsonl`. A five-minute page costs roughly 900
+     to 1,000 credits.
    - If ElevenLabs refuses (bad key, low credit), `auto` falls back to the Mac voice and says so.
 
 5. **Look once, then share.** If Chrome is installed and you may run it, take one screenshot and look at it before sharing:

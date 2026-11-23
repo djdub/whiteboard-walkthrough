@@ -1,11 +1,11 @@
 // Run with: node --test test/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, existsSync, readdirSync, copyFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, existsSync, readdirSync, copyFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { validate, renderPage, build } from '../skills/walkthrough/scripts/build.mjs';
+import { validate, renderPage, build, GENERATED_AUDIO } from '../skills/walkthrough/scripts/build.mjs';
 import { pickEngine, estimateSeconds } from '../skills/walkthrough/scripts/voice.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -137,4 +137,48 @@ test('links: shown on the page when valid, an error when not http(s)', () => {
   assert.ok(renderPage(s).includes('https://example.com/project'));
   s.links = [{ label: 'Bad', url: 'javascript:alert(1)' }];
   assert.ok(validate(s).errors.some((e) => e.includes('http(s) url')));
+});
+
+test('a step cannot carry its own audio: the field is an error, and the page only keeps known step fields', async () => {
+  const s = example();
+  s.steps[0].audio = 'https://attacker.example/track.mp3';
+  assert.ok(validate(s).errors.some((e) => e.includes('audio is written by the builder')));
+  const { d, p } = scratch();
+  const spec = JSON.parse(readFileSync(p, 'utf8')); spec.steps[0].extra = 'javascript:alert(1)';
+  writeFileSync(p, JSON.stringify(spec));
+  await build([p, '--voice', 'browser'], quiet);
+  const page = readFileSync(join(d, 'order-refunds', 'index.html'), 'utf8');
+  assert.ok(!page.includes('javascript:alert(1)'));
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('a build never deletes audio it did not write, and leaves a non-empty audio folder in place', async () => {
+  const { d, p } = scratch();
+  const out = join(d, 'site'); mkdirSync(join(out, 'audio'), { recursive: true });
+  writeFileSync(join(out, 'audio', 'theme-song.mp3'), 'not ours');
+  writeFileSync(join(out, 'audio', '01-0123456789.mp3'), 'an old take of ours');
+  await build([p, '--voice', 'browser', '--out', out], quiet);
+  assert.ok(existsSync(join(out, 'audio', 'theme-song.mp3')));
+  assert.ok(!existsSync(join(out, 'audio', '01-0123456789.mp3')));
+  assert.ok(GENERATED_AUDIO.test('12-abcdef0123.m4a') && !GENERATED_AUDIO.test('theme-song.mp3'));
+  rmSync(d, { recursive: true, force: true });
+});
+
+test('home: a logo link when name, url and logo are given; an error otherwise', () => {
+  const s = example();
+  s.home = { name: 'Example', url: 'https://example.com/', logo: 'https://example.com/logo.png' };
+  assert.deepEqual(validate(s).errors, []);
+  assert.ok(renderPage(s).includes('https://example.com/logo.png'));
+  s.home = { name: 'Example', url: 'javascript:alert(1)', logo: 'https://example.com/logo.png' };
+  assert.ok(validate(s).errors.some((e) => e.includes('home needs')));
+});
+
+test('malformed shapes are spec errors, not crashes', () => {
+  const s = example();
+  s.board.edges[0].via = [[1, 2]];
+  assert.ok(validate(s).errors.some((e) => e.includes('via must be')));
+  const t = example(); t.board.nodes = 'oops';
+  assert.ok(validate(t).errors.some((e) => e.includes('board.nodes must be a list')));
+  const u = example(); u.steps = { not: 'a list' };
+  assert.ok(validate(u).errors.some((e) => e.includes('steps must be a list')));
 });

@@ -35,20 +35,22 @@ it (a claude.ai Artifact if your Claude Code has one, otherwise a local file you
 |---|---|---|---|
 | Mac built-in (`--voice say`) | macOS | free | no |
 | Browser (`--voice browser`) | nothing; the page speaks with the reader's browser voice | free | no |
-| ElevenLabs (`--voice elevenlabs`) | `ELEVENLABS_API_KEY`, and `--ok-to-send` on each build | about 900 credits per five-minute page | yes |
+| ElevenLabs (`--voice elevenlabs`) | `ELEVENLABS_API_KEY`, and `--ok-to-send` on each build | roughly 900 to 1,000 credits per five-minute page | yes |
 
 The default, `--voice auto`, uses ElevenLabs only when a key is set and `--ok-to-send` is passed; otherwise the Mac
 voice, otherwise the browser. Optional: `ELEVENLABS_VOICE_ID` (default "George"), `ELEVENLABS_MODEL`,
-`WALKTHROUGH_SAY_VOICE` (default "Daniel"). The builder deletes each ElevenLabs history item after reading its charge.
+`WALKTHROUGH_SAY_VOICE` (default "Daniel"). The builder then deletes each ElevenLabs history item and warns if a deletion fails; credits are logged in
+`walkthroughs/<slug>.cost.jsonl`, beside the spec and outside the page's folder.
 
 If an audio file fails to load, the page reads that step with the browser voice; with no voice at all, the text is on
-screen to read along.
+screen to read along. The page loads its fonts from Google Fonts; offline, or where that is blocked, it uses system
+fonts.
 
 ## Try it
 
 ```
 node skills/walkthrough/scripts/build.mjs skills/walkthrough/examples/order-refunds.json --voice browser
-open skills/walkthrough/examples/order-refunds/index.html
+open skills/walkthrough/examples/order-refunds/index.html   # macOS; elsewhere open the file in a browser
 ```
 
 ## Tests
