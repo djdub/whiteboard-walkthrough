@@ -65,11 +65,12 @@ test('renderPage keeps a </script> in the text from breaking out of the spec blo
   assert.equal(html.match(/<\/script>/g).length, 2);
 });
 
-test('pickEngine: auto prefers a key, then the Mac voice, then the browser', () => {
-  assert.equal(pickEngine('auto', { key: 'k', say: true }), 'elevenlabs');
-  assert.equal(pickEngine('auto', { key: '', say: true }), 'say');
-  assert.equal(pickEngine('auto', { key: '', say: false }), 'browser');
-  assert.equal(pickEngine('say', { key: 'k', say: true }), 'say');
+test('pickEngine: auto prefers a key, then Qwen when set up, then the Mac voice, then the browser', () => {
+  assert.equal(pickEngine('auto', { key: 'k', say: true, qwen: true }), 'elevenlabs');
+  assert.equal(pickEngine('auto', { key: '', say: true, qwen: true }), 'qwen');
+  assert.equal(pickEngine('auto', { key: '', say: true, qwen: false }), 'say');
+  assert.equal(pickEngine('auto', { key: '', say: false, qwen: false }), 'browser');
+  assert.equal(pickEngine('say', { key: 'k', say: true, qwen: true }), 'say');
   assert.throws(() => pickEngine('robot'));
 });
 
@@ -121,7 +122,7 @@ test('the Mac voice makes one clip per step and reuses unchanged clips', { skip:
     const first = await build([p, '--voice', 'say'], quiet);
     assert.equal(first.todo, 8);
     const audio = join(d, 'order-refunds', 'audio');
-    assert.equal(readdirSync(audio).filter((f) => f.endsWith('.m4a')).length, 8);
+    assert.equal(readdirSync(audio).filter((f) => f.endsWith('.mp4')).length, 8);
     const again = await build([p, '--voice', 'say'], quiet);
     assert.equal(again.todo, 0);
     const html = readFileSync(join(d, 'order-refunds', 'index.html'), 'utf8');

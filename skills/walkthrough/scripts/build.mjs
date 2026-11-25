@@ -2,23 +2,27 @@
 // Whiteboard walkthrough builder. Reads a spec (board: lanes, columns, nodes, edges; steps: title, say, highlight),
 // voices each step, and writes one page plus an audio folder.
 //
-//   node build.mjs walkthroughs/<slug>.json [--voice auto|elevenlabs|say|browser] [--ok-to-send] [--out <dir>] [--dry-run]
+//   node build.mjs walkthroughs/<slug>.json [--voice auto|elevenlabs|qwen|say|browser] [--ok-to-send] [--out <dir>] [--dry-run]
+//   node build.mjs --setup-voice qwen        (once: the natural on-device voice, Apple Silicon Macs)
 //
-// Output: <spec folder>/<slug>/index.html and audio/<nn>-<hash>.<mp3|m4a>. A step keeps its audio while its text is
+// Output: <spec folder>/<slug>/index.html and audio/<nn>-<hash>.<mp3|mp4>. A step keeps its audio while its text is
 // unchanged, so an edit pays only for the steps it changed. ElevenLabs sends the text off the machine: it needs
-// --ok-to-send. With --voice browser no audio is made and the page speaks each step with the reader's browser voice.
+// --ok-to-send. Qwen and the Mac voice keep it on the machine. With --voice browser no audio is made and the page
+// speaks each step with the reader's browser voice.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync, rmdirSync, appendFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pickEngine, extFor, saySynthesize, elBalance, elSynthesize, elCharge, elDelete, audioSeconds, estimateSeconds, EL, SAY } from './voice.mjs';
+import { pickEngine, extFor, saySynthesize, elBalance, elSynthesize, elCharge, elDelete, audioSeconds, estimateSeconds, EL, SAY, qwenReady, qwenSetup, qwenSynthesize, qwenTag, appleSilicon } from './voice.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const KINDS = new Set(['new', 'exists', 'changed', 'fail']);
 const EDGE_KINDS = new Set(['fail', 'catch', 'plain']);
 const HTTP = /^https?:\/\//;
-/** Audio files this builder writes, and the only files it ever deletes: 01-0123456789.mp3 or .m4a */
-export const GENERATED_AUDIO = /^\d{2,3}-[0-9a-f]{10}\.(mp3|m4a)$/;
+/** Audio files this builder writes, and the only files it ever deletes: 01-0123456789.mp3 or .mp4 (.m4a: older takes) */
+export const GENERATED_AUDIO = /^\d{2,3}-[0-9a-f]{10}\.(mp3|m4a|mp4)$/;
+const USAGE = 'usage: build.mjs <spec.json> [--voice auto|elevenlabs|qwen|say|browser] [--ok-to-send] [--out <dir>] [--dry-run]\n       build.mjs --setup-voice qwen';
+const VOICE_NAME = { elevenlabs: 'ElevenLabs', qwen: 'Qwen', say: 'Mac', browser: 'browser' };
 const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && Number.isFinite(v));
 
 const onBorder = ([x, y], n, t = 3) => x >= n.x - t && x <= n.x + n.w + t && y >= n.y - t && y <= n.y + n.h + t
@@ -93,10 +97,11 @@ export function renderPage(spec, template = readFileSync(join(HERE, 'player.html
 }
 
 function parseArgs(argv) {
-  const a = { spec: null, voice: 'auto', okToSend: false, out: null, dry: false };
+  const a = { spec: null, voice: 'auto', okToSend: false, out: null, dry: false, setupVoice: null };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--voice') a.voice = argv[++i];
+    else if (v === '--setup-voice') a.setupVoice = argv[++i] ?? '';
     else if (v === '--out') a.out = argv[++i];
     else if (v === '--ok-to-send') a.okToSend = true;
     else if (v === '--dry-run') a.dry = true;
@@ -108,7 +113,12 @@ function parseArgs(argv) {
 
 export async function build(argv, log = console.log) {
   const a = parseArgs(argv);
-  if (!a.spec) throw new Error('usage: build.mjs <spec.json> [--voice auto|elevenlabs|say|browser] [--ok-to-send] [--out <dir>] [--dry-run]');
+  if (a.setupVoice !== null) {
+    if (a.setupVoice !== 'qwen') throw new Error(`--setup-voice takes qwen (the only voice that needs setting up), not ${JSON.stringify(a.setupVoice)}`);
+    qwenSetup({ log });
+    return { setup: 'qwen' };
+  }
+  if (!a.spec) throw new Error(USAGE);
   const spec = JSON.parse(readFileSync(a.spec, 'utf8'));
   const { errors, warnings } = validate(spec);
   for (const w of warnings) log('warning: ' + w);
@@ -118,15 +128,20 @@ export async function build(argv, log = console.log) {
   let engine = pickEngine(a.voice, { key });
   if (engine === 'elevenlabs' && !key) throw new Error('--voice elevenlabs needs ELEVENLABS_API_KEY in the environment');
   if (engine === 'elevenlabs' && !a.okToSend) {
-    if (a.voice === 'elevenlabs') throw new Error('ElevenLabs sends the step text off this machine: add --ok-to-send if that is fine, or use --voice say');
+    if (a.voice === 'elevenlabs') throw new Error('ElevenLabs sends the step text off this machine: add --ok-to-send if that is fine, or use --voice qwen or --voice say');
     engine = pickEngine('auto', { key: '' });
-    log(`ElevenLabs key found but --ok-to-send not given; using the ${engine === 'say' ? 'Mac' : 'browser'} voice instead`);
+    log(`ElevenLabs key found but --ok-to-send not given; using the ${VOICE_NAME[engine]} voice instead`);
+  }
+  if (engine === 'qwen' && !qwenReady()) {
+    throw new Error(appleSilicon() ? 'the Qwen voice is not set up (or was set up for an older version); run once: node build.mjs --setup-voice qwen'
+      : 'the Qwen voice needs a Mac with Apple Silicon; use --voice say or --voice browser');
   }
 
   const slug = basename(a.spec, '.json');
   const out = resolve(a.out || join(dirname(a.spec), slug));
   const audioDir = join(out, 'audio');
-  const tag = engine === 'elevenlabs' ? `el:${EL.voiceId}:${EL.model}` : `say:${SAY.voice}`;
+  const tag = engine === 'elevenlabs' ? `el:${EL.voiceId}:${EL.model}`
+    : engine === 'qwen' ? qwenTag() : `say:${SAY.voice}`;
   const need = spec.steps.map((s, i) => ({ i, s, file: engine === 'browser' ? null : `${String(i + 1).padStart(2, '0')}-${createHash('sha256').update(tag + '\n' + s.say).digest('hex').slice(0, 10)}.${extFor(engine)}` }));
   const todo = need.filter((x) => x.file && !existsSync(join(audioDir, x.file)));
   const chars = todo.reduce((n, x) => n + x.s.say.length, 0);
@@ -144,7 +159,11 @@ export async function build(argv, log = console.log) {
 
   mkdirSync(audioDir, { recursive: true });
   const charged = [];
-  for (const x of todo) {
+  if (engine === 'qwen' && todo.length) {   // one worker run for every step: the model loads once
+    const stepOf = new Map(todo.map((x) => [x.file, x.i + 1]));
+    await qwenSynthesize(todo.map((x) => ({ text: x.s.say, file: x.file })), audioDir, { onClip: (r) => log(`  voiced step ${stepOf.get(r.file) ?? r.file}`) });
+  }
+  for (const x of engine === 'qwen' ? [] : todo) {
     const file = join(audioDir, x.file);
     if (engine === 'say') saySynthesize(x.s.say, file);
     else {

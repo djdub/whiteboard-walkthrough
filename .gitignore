@@ -4,3 +4,4 @@ node_modules/
 .DS_Store
 docs/how-it-works/
 docs/*.cost.jsonl
+__pycache__/

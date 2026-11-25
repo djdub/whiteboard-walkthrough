@@ -17,7 +17,8 @@ arrows with a yellow highlighter, and hands on to the next when it ends. The pag
 chapter list and the spoken text on screen, and it closes with the decision the reader is being asked to make.
 
 The scripts sit next to this file: `scripts/build.mjs` (the builder), `scripts/voice.mjs` (the voices),
-`scripts/player.html` (the page), and `examples/order-refunds.json` (a worked example to copy). Claude Code gives this
+`scripts/voice_qwen.py` (the on-device Qwen voice), `scripts/player.html` (the page), `voices/narrator.wav` (the Qwen
+narrator's voice sample), and `examples/order-refunds.json` (a worked example to copy). Claude Code gives this
 skill's base directory when it loads it; call it `SKILL_DIR` below.
 
 ## Procedure
@@ -70,16 +71,23 @@ skill's base directory when it loads it; call it `SKILL_DIR` below.
    (fix them and run again), prints warnings for crowded labels or steps outside the word range, voices each step and
    writes `walkthroughs/<slug>/index.html` with an `audio/` folder beside it. Re-runs only re-voice steps whose text
    changed.
-   - **Voices.** `--voice auto` (the default) picks ElevenLabs if `ELEVENLABS_API_KEY` is set, otherwise the Mac's
-     built-in voice, otherwise the reader's browser voice (no audio files; the page speaks each step itself).
-     `--voice say`, `--voice elevenlabs` and `--voice browser` force one. With the browser voice the play time on the
-     page is an estimate, and the voice sounds different in each browser; say so when you share it.
+   - **Voices.** `--voice auto` (the default) picks ElevenLabs if `ELEVENLABS_API_KEY` is set (and `--ok-to-send` is
+     given), otherwise Qwen if it is set up, otherwise the Mac's built-in voice, otherwise the reader's browser voice
+     (no audio files; the page speaks each step itself). `--voice qwen`, `--voice say`, `--voice elevenlabs` and
+     `--voice browser` force one. With the browser voice the play time on the page is an estimate, and the voice
+     sounds different in each browser; say so when you share it.
+   - **Qwen is the natural voice that stays on the machine** (Qwen3-TTS; Apple Silicon Macs on macOS 14 or later). It
+     needs a one-time `node SKILL_DIR/scripts/build.mjs --setup-voice qwen`: a private Python environment and about
+     4.5 GB of model, all under `~/.cache/whiteboard-walkthrough`. Run it only when the user agrees to that download;
+     it needs Python 3.11 to 3.14 (`WALKTHROUGH_PYTHON` points at one). Voicing runs inside macOS's sandbox with the
+     network denied, at about real-time speed (a five-minute page takes about five minutes to voice). If `--voice qwen` says it is not set up, offer
+     the setup command; don't run it unasked.
    - **ElevenLabs sends the text off the machine.** The builder refuses unless you also pass `--ok-to-send`. Pass it
      only when the text holds nothing confidential, and nothing the user has said must stay private; otherwise use
-     `--voice say`. The builder deletes each ElevenLabs history item after reading its credit charge (it warns if a
+     `--voice qwen` (or `--voice say`). The builder deletes each ElevenLabs history item after reading its credit charge (it warns if a
      deletion fails), and logs the credits in `walkthroughs/<slug>.cost.jsonl`. A five-minute page costs roughly 900
      to 1,000 credits.
-   - If ElevenLabs refuses (bad key, low credit), `auto` falls back to the Mac voice and says so.
+   - If ElevenLabs refuses (bad key, low credit), `auto` falls back to Qwen or the Mac voice and says so.
 
 5. **Look once, then share.** If Chrome is installed and you may run it, take one screenshot and look at it before sharing:
    `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars --window-size=1400,1500
@@ -96,7 +104,7 @@ skill's base directory when it loads it; call it `SKILL_DIR` below.
 
 ## Must not
 
-- Never voice confidential or private content with ElevenLabs; use `--voice say` or `--voice browser`.
+- Never voice confidential or private content with ElevenLabs; use `--voice qwen`, `--voice say` or `--voice browser`.
 - Never draw only the happy path.
 - The page is a picture of a proposal or a flow. Once the thing is built, the code and its own docs are the record;
   rebuild the page only when the subject is brought back for a decision.
