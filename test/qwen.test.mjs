@@ -1,4 +1,4 @@
-// These tests were written from SPEC.md by Codex before reading the implementation.
+// Written by Codex from the feature's spec before it read the implementation (an independent check on the builder's own tests).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { build, GENERATED_AUDIO } from '../skills/walkthrough/scripts/build.mjs'
 import { QWEN, extFor, pickEngine, qwenPaths, qwenReady } from '../skills/walkthrough/scripts/voice.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-// Review round 1: the fake-worker tests run the worker through macOS's sandbox-exec, so they need an Apple Silicon Mac.
+// The fake-worker tests run the worker through macOS's sandbox-exec, so they need an Apple Silicon Mac.
 const macOnly = process.platform === 'darwin' && process.arch === 'arm64' ? {} : { skip: 'needs an Apple Silicon Mac (sandbox-exec)' };
 const EXAMPLE = join(ROOT, 'skills/walkthrough/examples/order-refunds.json');
 const quiet = () => {};
@@ -34,7 +34,7 @@ const withEnv = async (values, fn) => {
   }
 };
 
-const marker = () => ({ packages: QWEN.packages, model: QWEN.model, revision: QWEN.revision, lock: QWEN.lock });   // lock: added to the spec in review round 1 (CC, 2026-11-25)
+const marker = () => ({ packages: QWEN.packages, model: QWEN.model, revision: QWEN.revision, lock: QWEN.lock });   // lock: added to the spec in review
 
 // This is an executable Node program placed at qwen/venv/bin/python.  It acts
 // like voice_qwen.py from the build's point of view, without importing Python
@@ -138,7 +138,7 @@ test('qwenReady requires Apple Silicon, the venv python, and an exact current ma
 });
 
 test('GENERATED_AUDIO recognizes only generated mp3, m4a, and mp4 clip names', () => {
-  for (const file of ['01-0123456789.mp3', '99-abcdef0123.m4a', '12-0123abcdef.mp4', '001-0123456789.mp4']) {   // spec: two or three digits (CC fixed the spec's "NN", 2026-11-25)
+  for (const file of ['01-0123456789.mp3', '99-abcdef0123.m4a', '12-0123abcdef.mp4', '001-0123456789.mp4']) {   // two or three digits: walkthroughs past 99 steps
     assert.equal(GENERATED_AUDIO.test(file), true, file);
   }
   for (const file of ['1-0123456789.mp4', '0001-0123456789.mp4', '01-012345678.mp4', '01-0123456789.wav', 'theme-song.mp3', '01-0123456789.mp4.bak']) {
